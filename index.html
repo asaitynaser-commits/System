@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0ea5e9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>منظومة الجرد المحلية المتقدمة</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts (Cairo & Tajawal) -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Html5-QRCode Scanner -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <!-- jsPDF & html2canvas for PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Cairo', 'sans-serif'], display: ['Tajawal', 'sans-serif'] },
+                    colors: {
+                        primary: '#0ea5e9',
+                        primaryDark: '#0284c7',
+                        secondary: '#4f46e5',
+                        success: '#10b981',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                        dark: '#0f172a',
+                        surface: '#f8fafc'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            font-family: 'Cairo', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            background-color: #e2e8f0; 
+            overscroll-behavior-y: none;
+        }
+        /* App Container Wrapper to simulate mobile screen on desktop */
+        .app-container {
+            width: 100%;
+            max-width: 480px;
+            height: 100dvh;
+            margin: 0 auto;
+            background-color: #f8fafc;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0,0,0,0.1);
+        }
+
+        ::-webkit-scrollbar { width: 0px; height: 0px; background: transparent; }
+        
+        .tab-content { 
+            display: none; 
+            opacity: 0; 
+            transition: opacity 0.3s ease, transform 0.3s ease; 
+            transform: translateY(10px); 
+        }
+        .tab-content.active { 
+            display: block; 
+            opacity: 1; 
+            transform: translateY(0); 
+            animation: fadeInTab 0.4s ease-out forwards;
+        }
+
+        @keyframes fadeInTab {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .nav-item { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .nav-item.active { color: #0ea5e9; font-weight: 800; transform: translateY(-4px); }
+        .nav-item.active i { transform: scale(1.2); text-shadow: 0 4px 10px rgba(14, 165, 233, 0.3); }
+        
+        /* Hidden PDF Container - Must be rendered properly by browser but invisible to user */
+        #pdf-export-container { 
+            position: fixed; 
+            left: -9999px; 
+            top: 0; 
+            background: white; 
+            width: 800px; /* Fixed A4 approximate width for consistent rendering */
+            padding: 40px; 
+            color: black; 
+            z-index: -1;
+            direction: rtl;
+        }
+
+        .bg-animated-gradient {
+            background: linear-gradient(-45deg, #0f172a, #1e1b4b, #0c4a6e, #172554);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        
+        .glass-card { 
+            background: rgba(255, 255, 255, 0.05); 
+            backdrop-filter: blur(20px); 
+            -webkit-backdrop-filter: blur(20px); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4); 
+        }
+        
+        .pin-input {
+            letter-spacing: 0.8em;
+            text-align: center;
+            font-size: 2.2rem;
+            font-weight: 900;
+        }
+
+        .spinner { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 3px solid white; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Ensure active states work smoothly on touch devices */
+        button:active { transform: scale(0.96); }
+        .no-active-scale:active { transform: none; }
+    </style>
+</head>
+<body class="text-gray-800 flex justify-center items-center h-screen w-screen m-0 selection:bg-primary selection:text-white">
+
+    <div class="app-container flex flex-col">
+
+        <!-- ================= PIN LOGIN SCREEN ================= -->
+        <div id="login-screen" class="absolute inset-0 z-50 bg-animated-gradient flex flex-col justify-center items-center px-6 transition-all duration-500">
+            <div class="glass-card p-8 rounded-[2.5rem] w-full max-w-[320px] text-center transform transition-transform duration-500">
+                <div class="w-24 h-24 bg-gradient-to-br from-white/20 to-white/5 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl backdrop-blur-md border border-white/20">
+                    <i class="fas fa-shield-halved text-5xl text-white drop-shadow-lg"></i>
+                </div>
+                <h1 class="text-3xl font-display font-black text-white mb-2 tracking-wide" id="login-sys-name">منظومة الجرد</h1>
+                <p class="text-blue-200 text-xs mb-8 font-light tracking-widest">المحلي - لا يتطلب إنترنت</p>
+
+                <form id="pin-form" onsubmit="event.preventDefault(); app.verifyPin();" class="space-y-6">
+                    <div>
+                        <label class="text-white/70 text-xs font-bold mb-3 block px-2">أدخل رمز المرور (PIN) للوصول</label>
+                        <input type="password" id="auth-pin" required maxlength="4" placeholder="••••" class="w-full bg-black/30 border border-white/20 text-white rounded-2xl p-4 pin-input focus:outline-none focus:border-primary transition-colors text-center" inputmode="numeric" pattern="[0-9]*">
+                        <p class="text-white/40 text-[10px] mt-2">الرمز الافتراضي المبدئي: 0000</p>
+                    </div>
+                    
+                    <button type="submit" class="w-full bg-primary hover:bg-primaryDark text-white font-black text-lg py-4 rounded-2xl shadow-[0_10px_20px_rgba(14,165,233,0.3)] transition-all flex justify-center items-center gap-3">
+                        <span>دخول للمنظومة</span>
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </form>
+            </div>
+            <p class="text-white/30 text-[10px] mt-8 font-mono">Secure Local Storage</p>
+        </div>
+
+        <!-- ================= TOP HEADER ================= -->
+        <header id="app-header" class="bg-white text-dark p-4 flex justify-between items-center hidden z-10 border-b border-slate-100 shadow-sm relative pt-safe">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-gradient-to-br from-primary to-secondary text-white rounded-2xl flex items-center justify-center font-bold shadow-md">
+                    <i class="fas fa-box-archive text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="font-display font-black leading-tight text-xl tracking-tight text-slate-800" id="header-sys-name">المنظومة</h2>
+                    <div class="flex items-center gap-1 mt-0.5">
+                        <div class="w-2 h-2 rounded-full bg-success"></div>
+                        <p class="text-[10px] text-slate-400 font-bold" id="header-branch-name">تخزين محلي (آمن)</p>
+                    </div>
+                </div>
+            </div>
+            <button onclick="app.logout()" class="w-10 h-10 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center hover:bg-red-50 hover:text-danger transition">
+                <i class="fas fa-lock text-lg"></i>
+            </button>
+        </header>
+
+        <!-- ================= MAIN CONTENT ================= -->
+        <main class="flex-1 overflow-y-auto overflow-x-hidden pb-28 bg-surface hidden relative" id="main-content">
+            
+            <!-- 1. DASHBOARD -->
+            <div id="view-home" class="tab-content active p-5">
+                <div class="flex justify-between items-end mb-6">
+                    <div>
+                        <p class="text-sm text-slate-500 font-bold">مرحباً بك في</p>
+                        <h3 class="text-2xl font-display font-black text-slate-800">لوحة القيادة</h3>
+                    </div>
+                    <span class="bg-primary/10 text-primary px-3 py-1 rounded-lg text-xs font-bold" id="dash-date">اليوم</span>
+                </div>
+                
+                <!-- Financial Overview Cards -->
+                <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-[2rem] p-6 mb-6 text-white shadow-lg relative overflow-hidden">
+                    <div class="absolute right-0 top-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl"></div>
+                    <h4 class="text-xs text-slate-400 font-bold mb-4 flex items-center gap-2"><i class="fas fa-wallet text-primary"></i> الملخص المالي للمخزون (الدفترى)</h4>
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <p class="text-[10px] text-slate-400 mb-1">إجمالي قيمة المخزون المسجل</p>
+                            <h2 class="text-3xl font-black font-display text-white truncate max-w-[200px]" id="dash-total-cost">0 <span class="text-sm text-slate-400 font-normal">د.ل</span></h2>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-8">
+                    <div class="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
+                        <div class="w-12 h-12 bg-blue-50 text-primary rounded-2xl flex items-center justify-center mb-3 text-xl"><i class="fas fa-box-open"></i></div>
+                        <span class="text-2xl font-display font-black text-slate-800" id="stat-total-products">0</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 text-center">إجمالي المنتجات</span>
+                    </div>
+                    <div class="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
+                        <div class="w-12 h-12 bg-emerald-50 text-success rounded-2xl flex items-center justify-center mb-3 text-xl"><i class="fas fa-clipboard-check"></i></div>
+                        <span class="text-2xl font-display font-black text-slate-800" id="stat-audited">0</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 text-center">تم جردها مؤخراً</span>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-primary to-secondary text-white rounded-[2rem] p-6 shadow-[0_10px_30px_rgba(79,70,229,0.3)] relative overflow-hidden active:scale-95 transition-transform cursor-pointer" onclick="app.nav('audit'); app.openScanner()">
+                    <div class="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+                    <div class="relative z-10 flex justify-between items-center">
+                        <div>
+                            <h3 class="text-xl font-display font-black mb-1">إجراء جرد سريع</h3>
+                            <p class="text-white/80 text-xs font-light">اضغط هنا لفتح الكاميرا والبدء المباشر</p>
+                        </div>
+                        <div class="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-2xl backdrop-blur-sm shadow-inner">
+                            <i class="fas fa-barcode"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. PRODUCTS -->
+            <div id="view-products" class="tab-content p-5">
+                <div class="flex justify-between items-end mb-5">
+                    <div>
+                        <p class="text-sm text-slate-500 font-bold">قاعدة البيانات المحلية</p>
+                        <h3 class="text-2xl font-display font-black text-slate-800">المنتجات</h3>
+                    </div>
+                    <button onclick="app.openModal('addProductModal', true)" class="bg-dark text-white px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg">
+                        <i class="fas fa-plus text-sm"></i> <span class="font-bold text-sm">منتج جديد</span>
+                    </button>
+                </div>
+                
+                <div class="relative mb-4">
+                    <input type="text" id="search-products" oninput="app.renderProducts()" placeholder="ابحث بالاسم، الباركود، أو القسم..." class="w-full bg-white border border-slate-200 rounded-2xl py-3.5 px-5 pl-12 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none shadow-sm transition text-sm">
+                    <i class="fas fa-search absolute left-5 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                </div>
+
+                <div class="flex gap-2 mb-6 overflow-x-auto pb-2 scroll-smooth" id="category-filters-container" style="-webkit-overflow-scrolling: touch;">
+                    <!-- Dynamic Categories -->
+                </div>
+
+                <div id="products-list" class="space-y-3 pb-4">
+                    <!-- Products -->
+                </div>
+            </div>
+
+            <!-- 3. AUDIT -->
+            <div id="view-audit" class="tab-content p-5">
+                <div class="mb-6">
+                    <p class="text-sm text-slate-500 font-bold">مطابقة وتحديث الأرصدة</p>
+                    <h3 class="text-2xl font-display font-black text-slate-800">عمليات الجرد</h3>
+                </div>
+                
+                <div class="flex gap-2 mb-8 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
+                    <input type="text" id="audit-search" placeholder="أدخل كود المنتج أو ابحث..." class="flex-1 bg-transparent py-2 px-3 outline-none text-right font-bold text-slate-700 text-sm">
+                    <button onclick="app.searchForAudit()" class="bg-primary text-white w-12 rounded-xl shadow-md flex justify-center items-center"><i class="fas fa-search"></i></button>
+                    <button onclick="app.openScanner()" class="bg-slate-800 text-white w-12 rounded-xl shadow-md flex items-center justify-center text-lg"><i class="fas fa-camera"></i></button>
+                </div>
+
+                <!-- Active Item for Audit -->
+                <div id="audit-active-item" class="hidden bg-white p-5 rounded-[2rem] shadow-xl border border-blue-50 relative overflow-hidden transform transition-all mb-8">
+                    <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-primary to-secondary"></div>
+                    
+                    <div class="flex justify-between items-start mb-5 pt-2">
+                        <div>
+                            <span class="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded-md mb-2 inline-block" id="audit-item-cat">القسم</span>
+                            <h4 class="font-display font-black text-lg text-slate-800 leading-tight" id="audit-item-name">اسم المنتج</h4>
+                            <p class="text-slate-400 text-xs mt-1 font-mono tracking-wider bg-slate-50 inline-block px-2 py-0.5 rounded" id="audit-item-code">12345</p>
+                        </div>
+                        <div class="text-left bg-slate-50 px-3 py-2 rounded-xl">
+                            <p class="text-[9px] text-slate-400 font-bold mb-0.5">سعر البيع</p>
+                            <p class="text-base font-black text-slate-800"><span id="audit-item-price">0</span> <span class="text-[10px] text-slate-500">د.ل</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-50 rounded-2xl p-4 flex justify-between items-center mb-5 border border-slate-100 relative">
+                        <div class="text-center flex-1">
+                            <p class="text-[10px] text-slate-500 font-bold mb-1">الرصيد الدفتري</p>
+                            <div class="text-2xl font-display font-black text-slate-400" id="audit-item-original">0</div>
+                        </div>
+                        <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-slate-300 shadow-sm border border-slate-100 z-10 text-xs"><i class="fas fa-arrow-left"></i></div>
+                        <div class="text-center flex-1">
+                            <p class="text-[10px] text-primary font-bold mb-1">الرصيد الفعلي</p>
+                            <input type="number" id="audit-actual-qty" placeholder="0" class="text-3xl font-display font-black text-center text-primary bg-transparent border-b-2 border-primary/30 w-20 focus:border-primary outline-none transition-colors mx-auto p-0" oninput="app.calculateAuditDiff()" inputmode="numeric">
+                        </div>
+                    </div>
+
+                    <div id="audit-result-box" class="hidden rounded-xl p-3 mb-5 text-center font-bold text-sm transition-all border">
+                        <span id="audit-diff-text"></span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="app.saveAudit()" class="flex-1 bg-dark text-white font-black py-3 rounded-xl shadow-lg hover:bg-black transition flex items-center justify-center gap-2">
+                            <span>حفظ الجرد</span> <i class="fas fa-check"></i>
+                        </button>
+                        <button onclick="app.cancelAudit()" class="w-12 bg-slate-100 text-slate-500 font-black py-3 rounded-xl transition flex items-center justify-center">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <div class="flex justify-between items-center mb-4 px-1">
+                        <h4 class="font-bold text-slate-500 text-xs"><i class="fas fa-history text-slate-400 mr-1"></i> آخر عمليات الجرد (محلياً)</h4>
+                    </div>
+                    <div id="audit-history-list" class="space-y-2.5"></div>
+                </div>
+            </div>
+
+            <!-- 4. REPORTS -->
+            <div id="view-reports" class="tab-content p-5">
+                <div class="mb-6">
+                    <p class="text-sm text-slate-500 font-bold">الاستخراج والتحليل</p>
+                    <h3 class="text-2xl font-display font-black text-slate-800">التقارير</h3>
+                </div>
+                
+                <div class="bg-dark text-white rounded-[2rem] shadow-xl p-6 mb-6 relative overflow-hidden">
+                    <div class="absolute -right-10 -bottom-10 w-32 h-32 bg-primary/20 rounded-full blur-3xl"></div>
+                    <h4 class="font-bold text-slate-300 mb-5 text-xs flex items-center gap-2"><i class="fas fa-chart-pie text-primary"></i> ملخص عمليات الجرد الحالية</h4>
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-5">
+                        <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+                            <p class="text-[9px] text-slate-400 mb-0.5">منتجات تم جردها</p>
+                            <p class="text-xl font-black text-white" id="rep-audited">0</p>
+                        </div>
+                        <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+                            <p class="text-[9px] text-slate-400 mb-0.5">أصناف مطابقة</p>
+                            <p class="text-xl font-black text-success" id="rep-match">0</p>
+                        </div>
+                        <div class="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
+                            <p class="text-[9px] text-amber-200 mb-0.5">أصناف بها زيادة</p>
+                            <p class="text-xl font-black text-warning" id="rep-surplus">0</p>
+                        </div>
+                        <div class="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                            <p class="text-[9px] text-red-200 mb-0.5">أصناف بها عجز</p>
+                            <p class="text-xl font-black text-danger" id="rep-shortage">0</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <div class="bg-white/5 border border-white/10 rounded-xl p-3 flex justify-between items-center">
+                            <span class="text-xs text-slate-300 font-bold">قيمة الفائض:</span> 
+                            <span class="text-sm font-black text-success" id="rep-val-surplus">0 د.ل</span>
+                        </div>
+                        <div class="bg-red-500/20 border border-red-500/30 rounded-xl p-3 flex justify-between items-center">
+                            <span class="text-xs text-red-200 font-bold">إجمالي العجز المالي:</span> 
+                            <span class="text-base font-black text-red-400" id="rep-val-loss">0 د.ل</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h4 class="font-bold text-slate-800 mb-3 text-xs px-1"><i class="fas fa-file-pdf text-danger mr-1"></i> استخراج تقارير PDF المعتمدة</h4>
+                <div class="grid grid-cols-1 gap-3 mb-6">
+                    
+                    <button onclick="app.generatePDF(1)" class="bg-white border border-slate-200 p-3.5 rounded-2xl flex items-center justify-between shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-blue-50 text-primary rounded-lg flex items-center justify-center text-lg"><i class="fas fa-file-lines"></i></div>
+                            <div class="text-right">
+                                <h5 class="font-bold text-slate-800 text-sm">التقرير الشامل للجرد</h5>
+                                <p class="text-[9px] text-slate-400 mt-0.5">يعرض جميع الأصناف والفروقات المالية</p>
+                            </div>
+                        </div>
+                        <i class="fas fa-download text-slate-300 text-sm"></i>
+                    </button>
+
+                    <button onclick="app.generatePDF(2)" class="bg-white border border-slate-200 p-3.5 rounded-2xl flex items-center justify-between shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-red-50 text-danger rounded-lg flex items-center justify-center text-lg"><i class="fas fa-code-compare"></i></div>
+                            <div class="text-right">
+                                <h5 class="font-bold text-slate-800 text-sm">تقرير الفروقات والتسويات</h5>
+                                <p class="text-[9px] text-slate-400 mt-0.5">الأصناف التي بها عجز أو زيادة فقط</p>
+                            </div>
+                        </div>
+                        <i class="fas fa-download text-slate-300 text-sm"></i>
+                    </button>
+
+                    <button onclick="app.generatePDF(3)" class="bg-white border border-slate-200 p-3.5 rounded-2xl flex items-center justify-between shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-emerald-50 text-success rounded-lg flex items-center justify-center text-lg"><i class="fas fa-list-check"></i></div>
+                            <div class="text-right">
+                                <h5 class="font-bold text-slate-800 text-sm">تقرير الجرد الفعلي الميداني</h5>
+                                <p class="text-[9px] text-slate-400 mt-0.5">الكميات الفعلية المجرودة فقط (بدون أسعار)</p>
+                            </div>
+                        </div>
+                        <i class="fas fa-download text-slate-300 text-sm"></i>
+                    </button>
+                </div>
+
+                <h4 class="font-bold text-slate-800 mb-3 text-xs px-1"><i class="fas fa-file-excel text-success mr-1"></i> بيانات إكسيل</h4>
+                <button onclick="app.exportCSV()" class="w-full bg-emerald-50 border border-emerald-100 p-3.5 rounded-2xl flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center text-lg"><i class="fas fa-table"></i></div>
+                        <div class="text-right">
+                            <h5 class="font-bold text-emerald-900 text-sm">تصدير قاعدة البيانات بالكامل (CSV)</h5>
+                        </div>
+                    </div>
+                    <i class="fas fa-download text-emerald-400 text-sm"></i>
+                </button>
+            </div>
+
+            <!-- 5. SETTINGS -->
+            <div id="view-settings" class="tab-content p-5">
+                <div class="mb-6">
+                    <p class="text-sm text-slate-500 font-bold">تخصيص النظام</p>
+                    <h3 class="text-2xl font-display font-black text-slate-800">الإعدادات</h3>
+                </div>
+                
+                <div class="bg-white rounded-[1.5rem] shadow-sm border border-slate-100 p-5 mb-5">
+                    <h4 class="font-bold text-slate-800 text-sm border-b border-slate-50 pb-2 mb-3 flex items-center gap-2"><i class="fas fa-building text-primary"></i> بيانات المنشأة (لظهورها بالتقارير)</h4>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">اسم المنظومة (المحل/الشركة)</label>
+                            <input type="text" id="set-sysname" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-primary text-sm font-bold text-slate-700" onchange="app.saveSettings()">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">الفرع الحالي</label>
+                            <input type="text" id="set-branch" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-primary text-sm font-bold text-slate-700" onchange="app.saveSettings()">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">اسم المسؤول المعتمد</label>
+                            <input type="text" id="set-user" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-primary text-sm font-bold text-slate-700" onchange="app.saveSettings()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[1.5rem] shadow-sm border border-slate-100 p-5 mb-5">
+                    <h4 class="font-bold text-slate-800 text-sm border-b border-slate-50 pb-2 mb-3 flex items-center gap-2"><i class="fas fa-lock text-primary"></i> حماية التطبيق</h4>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">رمز الدخول الجديد (PIN) - 4 أرقام</label>
+                        <div class="flex gap-2">
+                            <input type="password" id="set-pin" maxlength="4" placeholder="••••" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-primary text-center tracking-[0.5em] font-bold text-slate-700">
+                            <button onclick="app.updatePIN()" class="bg-dark text-white px-4 rounded-xl font-bold text-xs shadow-md">تغيير الرمز</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[1.5rem] shadow-sm border border-slate-100 p-5 mb-5">
+                    <h4 class="font-bold text-slate-800 text-sm border-b border-slate-50 pb-2 mb-3 flex items-center gap-2"><i class="fas fa-tags text-primary"></i> إدارة الأقسام</h4>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="new-cat-input" placeholder="اسم القسم الجديد..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-primary text-sm font-bold">
+                        <button onclick="app.addCategory()" class="bg-primary text-white w-12 rounded-xl font-bold shadow-md flex items-center justify-center"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <div id="settings-categories-list" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1" style="-webkit-overflow-scrolling: touch;">
+                        <!-- Dynamic categories -->
+                    </div>
+                </div>
+
+                <div class="bg-red-50 rounded-[1.5rem] border border-red-100 p-5 text-center">
+                    <h4 class="font-black text-danger text-sm mb-3 flex items-center justify-center gap-2"><i class="fas fa-triangle-exclamation"></i> منطقة الإدارة الخطرة</h4>
+                    <button onclick="app.resetAuditData()" class="w-full bg-white text-danger border border-red-200 font-bold py-2.5 rounded-xl shadow-sm mb-2 text-xs flex justify-center items-center gap-2">
+                        <i class="fas fa-eraser"></i> تصفير عمليات الجرد الحالية فقط
+                    </button>
+                    <button onclick="app.deleteAllProducts()" class="w-full bg-danger text-white font-bold py-2.5 rounded-xl shadow-md text-xs flex justify-center items-center gap-2">
+                        <i class="fas fa-trash-can"></i> حذف كافة المنتجات والبيانات (فورمات)
+                    </button>
+                </div>
+                
+                <div class="text-center mt-6 pb-2">
+                    <p class="text-[10px] text-slate-400 font-mono font-bold">Local Inventory Pro v1.0</p>
+                    <p class="text-[9px] text-slate-400 mt-1"><i class="fas fa-database"></i> تعمل حصرياً على ذاكرة هذا الجهاز</p>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- ================= BOTTOM NAVIGATION ================= -->
+        <nav id="bottom-nav" class="bg-white border-t border-slate-100 flex justify-between px-2 pb-5 pt-2 hidden z-20 shadow-[0_-10px_20px_rgba(0,0,0,0.03)] rounded-t-3xl absolute bottom-0 w-full">
+            <button onclick="app.nav('home')" class="nav-item active flex-1 flex flex-col items-center justify-center p-1.5 text-slate-400">
+                <i class="fas fa-home text-xl mb-1"></i>
+                <span class="text-[9px] font-bold">الرئيسية</span>
+            </button>
+            <button onclick="app.nav('products')" class="nav-item flex-1 flex flex-col items-center justify-center p-1.5 text-slate-400">
+                <i class="fas fa-boxes-stacked text-xl mb-1"></i>
+                <span class="text-[9px] font-bold">المنتجات</span>
+            </button>
+            <div class="flex-1 flex justify-center -mt-8 relative">
+                <div class="absolute inset-0 bg-surface rounded-full w-[60px] h-[60px] mx-auto -top-2 shadow-inner border border-slate-100"></div>
+                <button onclick="app.nav('audit'); app.openScanner()" class="relative z-10 w-[52px] h-[52px] bg-gradient-to-tr from-primary to-secondary text-white rounded-full shadow-[0_8px_15px_rgba(14,165,233,0.3)] flex items-center justify-center text-xl active:scale-90 transition-transform">
+                    <i class="fas fa-barcode"></i>
+                </button>
+            </div>
+            <button onclick="app.nav('reports')" class="nav-item flex-1 flex flex-col items-center justify-center p-1.5 text-slate-400">
+                <i class="fas fa-chart-pie text-xl mb-1"></i>
+                <span class="text-[9px] font-bold">التقارير</span>
+            </button>
+            <button onclick="app.nav('settings')" class="nav-item flex-1 flex flex-col items-center justify-center p-1.5 text-slate-400">
+                <i class="fas fa-gear text-xl mb-1"></i>
+                <span class="text-[9px] font-bold">الإعدادات</span>
+            </button>
+        </nav>
+
+        <!-- ================= MODALS ================= -->
+        
+        <!-- Add/Edit Product Modal -->
+        <div id="addProductModal" class="hidden absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center transition-opacity">
+            <div class="bg-white w-full rounded-t-[2rem] p-5 transform transition-transform duration-300 translate-y-full shadow-2xl h-[85vh] flex flex-col" id="addProductForm">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-display font-black text-slate-800" id="modal-product-title">إضافة منتج جديد</h3>
+                    <div class="flex gap-2">
+                        <button type="button" id="btn-delete-product" onclick="app.deleteProduct()" class="hidden w-8 h-8 bg-red-50 rounded-full text-danger flex items-center justify-center"><i class="fas fa-trash text-sm"></i></button>
+                        <button type="button" onclick="app.closeModal('addProductModal')" class="w-8 h-8 bg-slate-100 rounded-full text-slate-500 flex items-center justify-center"><i class="fas fa-times text-sm"></i></button>
+                    </div>
+                </div>
+                
+                <form onsubmit="event.preventDefault(); app.saveProduct();" class="flex-1 overflow-y-auto space-y-4 pr-1 pb-4" style="-webkit-overflow-scrolling: touch;">
+                    <input type="hidden" id="p-id">
+                    
+                    <div>
+                        <label class="text-[10px] text-slate-500 font-bold ml-1 mb-1 block">اسم المنتج *</label>
+                        <input type="text" id="p-name" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition font-bold text-slate-700 text-sm">
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <div class="flex-1">
+                            <label class="text-[10px] text-slate-500 font-bold ml-1 mb-1 block">الباركود (اختياري)</label>
+                            <div class="flex shadow-sm rounded-xl">
+                                <input type="text" id="p-code" placeholder="تلقائي" class="w-full bg-slate-50 border border-slate-200 border-l-0 rounded-r-xl p-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition font-mono text-sm" dir="ltr">
+                                <button type="button" onclick="app.openScannerForInput()" class="bg-slate-800 text-white px-3 rounded-l-xl flex items-center justify-center"><i class="fas fa-camera"></i></button>
+                            </div>
+                        </div>
+                        <div class="w-2/5">
+                            <label class="text-[10px] text-slate-500 font-bold ml-1 mb-1 block">القسم</label>
+                            <select id="p-cat" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary/20 transition text-sm font-bold text-slate-700">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] text-slate-500 font-bold ml-1 mb-1 block">الرصيد الدفتري الحالي (المخزون) *</label>
+                        <input type="number" id="p-qty" required min="0" class="w-full bg-blue-50/50 border border-blue-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary/20 text-center font-display font-black text-xl text-primary" inputmode="numeric">
+                    </div>
+
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <label class="text-[10px] text-slate-500 font-bold ml-1 mb-1 block">سعر البيع للقطعة (بالدينار)</label>
+                        <input type="number" id="p-price" step="0.01" value="0" min="0" class="w-full bg-white border border-slate-200 rounded-lg p-2 outline-none focus:ring-2 focus:ring-primary/20 text-center font-bold text-sm text-slate-700" inputmode="decimal">
+                    </div>
+
+                    <button type="submit" id="btn-save-product" class="w-full bg-primary text-white font-black py-3.5 rounded-xl shadow-lg mt-2 active:scale-95 transition flex justify-center items-center gap-2 text-base">
+                        <span id="btn-save-text">حفظ في الجهاز</span> <i class="fas fa-save"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Scanner Modal -->
+        <div id="scannerModal" class="hidden absolute inset-0 z-[60] bg-black flex flex-col transition-opacity">
+            <div class="p-4 flex justify-between items-center text-white bg-black/60 backdrop-blur-md absolute top-0 w-full z-10 pt-safe">
+                <h3 class="font-display font-bold text-sm"><i class="fas fa-qrcode text-primary mr-2"></i> الماسح الضوئي</h3>
+                <button type="button" onclick="app.closeScanner()" class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="reader" class="flex-1 w-full bg-black flex items-center justify-center relative overflow-hidden">
+                 <!-- Scanner UI Overlay -->
+                 <div class="absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-center">
+                     <div class="w-56 h-40 border-2 border-primary/50 rounded-2xl relative">
+                         <div class="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-2xl"></div>
+                         <div class="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-2xl"></div>
+                         <div class="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-2xl"></div>
+                         <div class="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-2xl"></div>
+                         <div class="absolute top-1/2 left-0 w-full h-[1px] bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div>
+                     </div>
+                 </div>
+            </div>
+            <div class="p-5 text-center text-white bg-black/60 backdrop-blur-md absolute bottom-0 w-full z-10 pb-safe">
+                <p class="text-xs font-light">وجه الكاميرا نحو الباركود للالتقاط التلقائي</p>
+            </div>
+        </div>
+        <style> @keyframes scan { 0%, 100% { transform: translateY(-20px); } 50% { transform: translateY(20px); } } </style>
+
+        <!-- Category Edit Modal -->
+        <div id="editCatModal" class="hidden absolute inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity">
+            <div class="bg-white w-full max-w-[320px] rounded-3xl p-5 shadow-2xl transform transition-transform scale-90" id="editCatForm">
+                <h3 class="text-base font-black text-slate-800 mb-3">تعديل اسم القسم</h3>
+                <input type="hidden" id="edit-cat-old">
+                <input type="text" id="edit-cat-new" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:border-primary font-bold mb-4 text-sm">
+                <div class="flex gap-2">
+                    <button onclick="app.saveCategoryEdit()" class="flex-1 bg-primary text-white font-bold py-2.5 rounded-xl shadow-md text-sm">حفظ وتحديث</button>
+                    <button onclick="app.closeModal('editCatModal')" class="w-16 bg-slate-100 text-slate-600 font-bold py-2.5 rounded-xl text-sm">إلغاء</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="absolute top-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2.5 rounded-2xl shadow-2xl transition-all duration-300 opacity-0 pointer-events-none z-[80] flex items-center gap-2 font-bold text-xs min-w-max border border-slate-700">
+            <i id="toast-icon" class="fas fa-check-circle text-success text-base"></i>
+            <span id="toast-msg">تمت العملية</span>
+        </div>
+
+    </div>
+
+    <!-- PDF RENDER TEMPLATE (HIDDEN) -->
+    <div id="pdf-export-container"></div>
+
+    <!-- ================= APP LOGIC (LOCAL STORAGE ONLY) ================= -->
+    <script>
+        window.app = {
+            data: {
+                products: [],
+                audits: {}, 
+                categories: [],
+                settings: null
+            },
+            currentCategory: 'all',
+            html5QrcodeScanner: null,
+            scannerTarget: null,
+            isAppUnlocked: false,
+
+            init: function() {
+                document.getElementById('dash-date').innerText = new Date().toLocaleDateString('ar-LY', { weekday:'long', year:'numeric', month:'short', day:'numeric' });
+                
+                // Modals closing handler
+                ['addProductModal', 'editCatModal'].forEach(id => {
+                    document.getElementById(id).addEventListener('click', (e) => {
+                        if(e.target.id === id) this.closeModal(id);
+                    });
+                });
+
+                this.loadLocalData();
+                this.checkSession();
+            },
+
+            // --- LOCAL STORAGE MANAGEMENT ---
+            loadLocalData: function() {
+                try {
+                    this.data.products = JSON.parse(localStorage.getItem('inv_products')) || [];
+                    this.data.audits = JSON.parse(localStorage.getItem('inv_audits')) || {};
+                    let savedSettings = JSON.parse(localStorage.getItem('inv_settings'));
+                    
+                    if(!savedSettings) {
+                        savedSettings = {
+                            pin: '0000',
+                            systemName: 'منظومة الجرد',
+                            branch: 'الفرع الرئيسي',
+                            user: 'المدير العام',
+                            categories: ['عام', 'إلكترونيات', 'ملابس', 'مواد غذائية']
+                        };
+                        localStorage.setItem('inv_settings', JSON.stringify(savedSettings));
+                    }
+                    this.data.settings = savedSettings;
+                    
+                    this.updateSystemNameUI();
+                    this.renderCategoriesUI();
+
+                    // Fill settings inputs
+                    document.getElementById('set-branch').value = this.data.settings.branch;
+                    document.getElementById('set-user').value = this.data.settings.user;
+                    document.getElementById('set-sysname').value = this.data.settings.systemName;
+
+                } catch (e) {
+                    console.error("Error loading local data", e);
+                    this.showToast("خطأ في قراءة البيانات المحلية", "error");
+                }
+            },
+
+            saveToLocal: function(key) {
+                try {
+                    if(key === 'products') localStorage.setItem('inv_products', JSON.stringify(this.data.products));
+                    if(key === 'audits') localStorage.setItem('inv_audits', JSON.stringify(this.data.audits));
+                    if(key === 'settings') localStorage.setItem('inv_settings', JSON.stringify(this.data.settings));
+                } catch(e) {
+                    this.showToast("لا توجد مساحة كافية في الهاتف للحفظ", "error");
+                }
+            },
+
+            // --- AUTHENTICATION ---
+            checkSession: function() {
+                // Keep unlocked if page is refreshed in the same session
+                if(sessionStorage.getItem('inv_unlocked') === 'true') {
+                    this.isAppUnlocked = true;
+                    this.showMainApp();
+                } else {
+                    document.getElementById('login-screen').classList.remove('hidden');
+                    setTimeout(() => document.getElementById('auth-pin').focus(), 300);
+                }
+            },
+
+            verifyPin: function() {
+                const enteredPin = document.getElementById('auth-pin').value;
+                const correctPin = this.data.settings?.pin || '0000';
+
+                if(enteredPin === correctPin) {
+                    this.isAppUnlocked = true;
+                    sessionStorage.setItem('inv_unlocked', 'true');
+                    document.getElementById('auth-pin').value = '';
+                    this.showMainApp();
+                } else {
+                    this.showToast('رمز المرور غير صحيح', 'error');
+                    const pinInput = document.getElementById('auth-pin');
+                    pinInput.value = '';
+                    pinInput.focus();
+                    
+                    const form = document.getElementById('pin-form');
+                    form.classList.add('translate-x-2');
+                    setTimeout(() => form.classList.replace('translate-x-2', '-translate-x-2'), 100);
+                    setTimeout(() => form.classList.replace('-translate-x-2', 'translate-x-2'), 200);
+                    setTimeout(() => form.classList.remove('translate-x-2'), 300);
+                }
+            },
+
+            logout: function() {
+                this.isAppUnlocked = false;
+                sessionStorage.removeItem('inv_unlocked');
+                document.getElementById('app-header').classList.add('hidden');
+                document.getElementById('main-content').classList.add('hidden');
+                document.getElementById('bottom-nav').classList.add('hidden');
+                document.getElementById('login-screen').classList.remove('hidden');
+                setTimeout(() => {
+                    document.getElementById('login-screen').classList.replace('opacity-0', 'opacity-100');
+                    document.getElementById('auth-pin').focus();
+                }, 50);
+            },
+
+            showMainApp: function() {
+                document.getElementById('login-screen').classList.replace('opacity-100', 'opacity-0');
+                setTimeout(() => {
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('app-header').classList.remove('hidden');
+                    document.getElementById('main-content').classList.remove('hidden');
+                    document.getElementById('bottom-nav').classList.remove('hidden');
+                    this.nav('home');
+                }, 400);
+            },
+
+            updateSystemNameUI: function() {
+                if(!this.data.settings) return;
+                const name = this.data.settings.systemName;
+                document.getElementById('header-sys-name').innerText = name;
+                document.getElementById('login-sys-name').innerText = name;
+                document.getElementById('header-branch-name').innerText = "تخزين محلي | " + this.data.settings.branch;
+            },
+
+            saveSettings: function() {
+                if(!this.isAppUnlocked) return;
+                this.data.settings.branch = document.getElementById('set-branch').value || 'الفرع';
+                this.data.settings.user = document.getElementById('set-user').value || 'مدير';
+                this.data.settings.systemName = document.getElementById('set-sysname').value || 'المنظومة';
+                
+                this.saveToLocal('settings');
+                this.updateSystemNameUI();
+                this.showToast('تم حفظ إعدادات المنشأة');
+            },
+
+            updatePIN: function() {
+                const newPin = document.getElementById('set-pin').value;
+                if(newPin.length !== 4) return this.showToast('رمز المرور يجب أن يكون 4 أرقام', 'error');
+                
+                if(confirm('تأكيد تغيير رمز الدخول؟ ستحتاج للرمز الجديد في المرة القادمة.')) {
+                    this.data.settings.pin = newPin;
+                    this.saveToLocal('settings');
+                    this.showToast('تم تغيير الرمز بنجاح', 'success');
+                    document.getElementById('set-pin').value = '';
+                }
+            },
+
+            // --- CATEGORIES (LOCAL) ---
+            addCategory: function() {
+                const input = document.getElementById('new-cat-input');
+                const val = input.value.trim();
+                if(!val) return;
+                if(this.data.settings.categories.includes(val)) return this.showToast('القسم موجود مسبقاً', 'error');
+                
+                this.data.settings.categories.push(val);
+                this.saveToLocal('settings');
+                input.value = '';
+                this.renderCategoriesUI();
+                this.showToast('تم إضافة القسم');
+            },
+
+            openEditCategory: function(catName) {
+                document.getElementById('edit-cat-old').value = catName;
+                document.getElementById('edit-cat-new').value = catName;
+                this.openModal('editCatModal');
+            },
+
+            saveCategoryEdit: function() {
+                const oldName = document.getElementById('edit-cat-old').value;
+                const newName = document.getElementById('edit-cat-new').value.trim();
+                
+                if(!newName || newName === oldName) return this.closeModal('editCatModal');
+                if(this.data.settings.categories.includes(newName)) {
+                    return this.showToast('الاسم الجديد موجود مسبقاً', 'error');
+                }
+
+                // Update settings
+                const index = this.data.settings.categories.indexOf(oldName);
+                if(index > -1) this.data.settings.categories[index] = newName;
+                this.saveToLocal('settings');
+
+                // Update Products
+                let count = 0;
+                this.data.products.forEach(p => {
+                    if(p.category === oldName) {
+                        p.category = newName;
+                        count++;
+                    }
+                });
+                
+                if(count > 0) this.saveToLocal('products');
+                
+                if(this.currentCategory === oldName) this.currentCategory = newName;
+                
+                this.renderCategoriesUI();
+                this.renderProducts();
+                this.closeModal('editCatModal');
+                this.showToast(`تم التحديث! تعدل ${count} منتج`);
+            },
+
+            renderCategoriesUI: function() {
+                if(!this.data.settings || !this.data.settings.categories) return;
+                const cats = this.data.settings.categories;
+
+                const list = document.getElementById('settings-categories-list');
+                list.innerHTML = '';
+                cats.forEach(c => {
+                    list.innerHTML += `
+                        <div class="bg-slate-50 border border-slate-100 px-3 py-2.5 rounded-xl flex items-center justify-between shadow-sm">
+                            <span class="font-bold text-slate-700 text-sm"><i class="fas fa-folder text-slate-300 mr-2"></i> ${c}</span>
+                            <div class="flex gap-2">
+                                <button onclick="app.openEditCategory('${c}')" class="w-7 h-7 bg-blue-100 text-primary rounded-md flex items-center justify-center"><i class="fas fa-pen text-[10px]"></i></button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                const select = document.getElementById('p-cat');
+                const currentVal = select.value;
+                select.innerHTML = '';
+                cats.forEach(c => { select.innerHTML += `<option value="${c}">${c}</option>`; });
+                if(cats.includes(currentVal)) select.value = currentVal;
+
+                const filterContainer = document.getElementById('category-filters-container');
+                let chipsHTML = `<button onclick="app.filterCategory('all')" class="cat-btn ${this.currentCategory==='all' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200'} px-4 py-1.5 rounded-xl text-xs whitespace-nowrap font-bold transition">الكل</button>`;
+                
+                cats.forEach(c => {
+                    const isActive = this.currentCategory === c;
+                    const classes = isActive ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200';
+                    chipsHTML += `<button onclick="app.filterCategory('${c}')" class="cat-btn ${classes} px-4 py-1.5 rounded-xl text-xs whitespace-nowrap font-bold transition">${c}</button>`;
+                });
+                filterContainer.innerHTML = chipsHTML;
+            },
+
+            filterCategory: function(cat) {
+                this.currentCategory = cat;
+                this.renderCategoriesUI(); 
+                this.renderProducts();
+            },
+
+            // --- NAVIGATION ---
+            nav: function(viewId) {
+                document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                
+                setTimeout(() => document.getElementById('view-' + viewId).classList.add('active'), 10);
+                
+                const navBtn = document.querySelector(`.nav-item[onclick="app.nav('${viewId}')"]`) || document.querySelector(`.nav-item[onclick="app.nav('${viewId}'); app.openScanner()"]`);
+                if(navBtn) navBtn.classList.add('active');
+
+                if(viewId === 'home') this.renderDashboard();
+                if(viewId === 'products') this.renderProducts();
+                if(viewId === 'reports') this.renderReportsSummary();
+            },
+
+            // --- DASHBOARD ---
+            renderDashboard: function() {
+                document.getElementById('stat-total-products').innerText = this.data.products.length;
+                document.getElementById('stat-audited').innerText = Object.keys(this.data.audits).length;
+                
+                let totalCost = 0;
+                this.data.products.forEach(p => {
+                    totalCost += ((p.originalQty || 0) * (p.price || 0));
+                });
+                document.getElementById('dash-total-cost').innerText = totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits:2});
+            },
+
+            // --- PRODUCTS CRUD (LOCAL) ---
+            renderProducts: function() {
+                const list = document.getElementById('products-list');
+                const search = document.getElementById('search-products').value.toLowerCase().trim();
+                
+                list.innerHTML = '';
+                
+                let filtered = this.data.products.filter(p => {
+                    const matchCat = this.currentCategory === 'all' || p.category === this.currentCategory;
+                    const matchSearch = p.name.toLowerCase().includes(search) || p.code.toLowerCase().includes(search);
+                    return matchCat && matchSearch;
+                });
+
+                if(filtered.length === 0) {
+                    list.innerHTML = `<div class="text-center text-slate-400 py-10 bg-white rounded-2xl border border-slate-100 shadow-sm"><i class="fas fa-box-open text-4xl mb-2 opacity-30"></i><p class="font-bold text-sm">لا يوجد منتجات</p></div>`;
+                    return;
+                }
+
+                filtered.sort((a,b) => b.createdAt - a.createdAt).forEach(p => {
+                    const auditStatus = this.data.audits[p.id];
+                    let badge = `<span class="bg-slate-100 text-slate-500 text-[9px] px-2 py-0.5 rounded-md font-bold">لم يجرد</span>`;
+                    
+                    if(auditStatus) {
+                        if(auditStatus.diff === 0) badge = `<span class="bg-emerald-100 text-success text-[9px] px-2 py-0.5 rounded-md font-bold"><i class="fas fa-check"></i> مطابق</span>`;
+                        else if(auditStatus.diff > 0) badge = `<span class="bg-amber-100 text-warning text-[9px] px-2 py-0.5 rounded-md font-bold"><i class="fas fa-arrow-up"></i> زيادة ${auditStatus.diff}</span>`;
+                        else badge = `<span class="bg-red-100 text-danger text-[9px] px-2 py-0.5 rounded-md font-bold"><i class="fas fa-arrow-down"></i> عجز ${Math.abs(auditStatus.diff)}</span>`;
+                    }
+
+                    const isZero = p.originalQty === 0;
+                    const borderClass = isZero ? 'border-red-200 bg-red-50/50' : 'border-slate-100 bg-white';
+                    const iconClass = isZero ? 'text-danger bg-red-100' : 'text-primary bg-blue-50';
+
+                    list.innerHTML += `
+                        <div class="${borderClass} p-3 rounded-2xl shadow-sm border flex justify-between items-center active:scale-[0.98] transition cursor-pointer" onclick="app.editProduct('${p.id}')">
+                            <div class="flex gap-3 items-center truncate">
+                                <div class="w-10 h-10 shrink-0 ${iconClass} rounded-xl flex items-center justify-center text-lg relative">
+                                    <i class="fas fa-box"></i>
+                                    ${isZero ? '<span class="absolute -top-1 -right-1 flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span></span>' : ''}
+                                </div>
+                                <div class="truncate">
+                                    <h4 class="font-display font-black text-slate-800 text-sm truncate">${p.name}</h4>
+                                    <div class="flex gap-1.5 items-center mt-1">
+                                        <p class="text-[9px] text-slate-500 font-mono bg-slate-100 px-1 rounded border border-slate-200"><i class="fas fa-barcode opacity-50"></i> ${p.code}</p>
+                                        <p class="text-[8px] text-slate-400 font-bold bg-slate-50 px-1 rounded truncate">${p.category}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-left flex flex-col items-end gap-1 shrink-0">
+                                <div class="font-black text-slate-800 text-sm bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">${p.originalQty}</div>
+                                ${badge}
+                            </div>
+                        </div>
+                    `;
+                });
+            },
+
+            saveProduct: function() {
+                const idInput = document.getElementById('p-id').value;
+                let code = document.getElementById('p-code').value.trim();
+                
+                if (!code) { code = 'SKU-' + Math.floor(100000 + Math.random() * 900000); } 
+                else {
+                    const existing = this.data.products.find(p => p.code === code);
+                    if(existing && existing.id !== idInput) {
+                        return this.showToast("الباركود مسجل لمنتج آخر!", "error");
+                    }
+                }
+
+                const productId = idInput || 'prod_' + Date.now();
+                const product = {
+                    id: productId,
+                    name: document.getElementById('p-name').value,
+                    code: code,
+                    category: document.getElementById('p-cat').value,
+                    originalQty: parseInt(document.getElementById('p-qty').value) || 0,
+                    price: parseFloat(document.getElementById('p-price').value) || 0,
+                    createdAt: idInput ? (this.data.products.find(p=>p.id===idInput)?.createdAt || Date.now()) : Date.now()
+                };
+
+                if(idInput) {
+                    const idx = this.data.products.findIndex(p => p.id === idInput);
+                    if(idx > -1) this.data.products[idx] = product;
+                } else {
+                    this.data.products.push(product);
+                }
+
+                this.saveToLocal('products');
+                this.closeModal('addProductModal');
+                this.renderProducts();
+                this.renderDashboard();
+                this.showToast(idInput ? 'تم التعديل محلياً' : 'تم الحفظ في الجهاز');
+            },
+
+            editProduct: function(id) {
+                const p = this.data.products.find(x => x.id === id);
+                if(!p) return;
+                
+                document.getElementById('p-id').value = p.id;
+                document.getElementById('p-name').value = p.name;
+                document.getElementById('p-code').value = p.code;
+                document.getElementById('p-cat').value = p.category;
+                document.getElementById('p-qty').value = p.originalQty;
+                document.getElementById('p-price').value = p.price;
+                
+                this.openModal('addProductModal', false);
+            },
+
+            deleteProduct: function() {
+                const id = document.getElementById('p-id').value;
+                if(!id) return;
+                
+                if(confirm("مسح نهائي: سيتم حذف هذا المنتج من الجهاز ولن يظهر في الجرد. موافق؟")) {
+                    this.data.products = this.data.products.filter(p => p.id !== id);
+                    if(this.data.audits[id]) delete this.data.audits[id];
+                    
+                    this.saveToLocal('products');
+                    this.saveToLocal('audits');
+                    
+                    this.closeModal('addProductModal');
+                    this.renderProducts();
+                    this.renderDashboard();
+                    this.showToast('تم المسح', 'success');
+                }
+            },
+
+            deleteAllProducts: function() {
+                if(confirm("فرمتة كاملة: هل أنت متأكد من مسح كافة بيانات المنتجات والجرد من هاتفك؟")) {
+                    this.data.products = [];
+                    this.data.audits = {};
+                    this.saveToLocal('products');
+                    this.saveToLocal('audits');
+                    this.showToast('تم تصفير النظام بالكامل', 'success');
+                    this.renderDashboard();
+                    this.renderProducts();
+                }
+            },
+
+            // --- SCANNER ---
+            openScanner: function() {
+                this.scannerTarget = 'audit';
+                document.getElementById('scannerModal').classList.remove('hidden');
+                setTimeout(() => document.getElementById('scannerModal').classList.remove('opacity-0'), 10);
+                this.initHtml5Qrcode();
+            },
+            
+            openScannerForInput: function() {
+                this.scannerTarget = 'input';
+                document.getElementById('scannerModal').classList.remove('hidden');
+                setTimeout(() => document.getElementById('scannerModal').classList.remove('opacity-0'), 10);
+                this.initHtml5Qrcode();
+            },
+
+            closeScanner: function() {
+                document.getElementById('scannerModal').classList.add('opacity-0');
+                setTimeout(() => {
+                    document.getElementById('scannerModal').classList.add('hidden');
+                    if(this.html5QrcodeScanner) {
+                        this.html5QrcodeScanner.stop().catch(e => console.log("Scanner stop error", e));
+                    }
+                }, 300);
+            },
+
+            initHtml5Qrcode: function() {
+                if(!this.html5QrcodeScanner) {
+                    this.html5QrcodeScanner = new Html5Qrcode("reader");
+                }
+                const config = { fps: 15, qrbox: { width: 200, height: 150 }, aspectRatio: 1.0 };
+                
+                this.html5QrcodeScanner.start({ facingMode: "environment" }, config, 
+                    (decodedText) => {
+                        this.playBeep();
+                        this.closeScanner();
+                        if(this.scannerTarget === 'audit') {
+                            document.getElementById('audit-search').value = decodedText;
+                            this.searchForAudit();
+                        } else if (this.scannerTarget === 'input') {
+                            document.getElementById('p-code').value = decodedText;
+                        }
+                    },
+                    (error) => {} 
+                ).catch((err) => {
+                    this.showToast("لا يمكن الوصول للكاميرا، تأكد من الصلاحيات", "error");
+                    this.closeScanner();
+                });
+            },
+
+            playBeep: function() {
+                if ("vibrate" in navigator) navigator.vibrate([50]);
+            },
+
+            // --- AUDIT LOGIC (LOCAL) ---
+            activeAuditProduct: null,
+
+            searchForAudit: function() {
+                const code = document.getElementById('audit-search').value.trim().toLowerCase();
+                if(!code) return;
+
+                const p = this.data.products.find(x => x.code.toLowerCase() === code || x.name.toLowerCase().includes(code));
+                if(p) {
+                    this.activeAuditProduct = p;
+                    document.getElementById('audit-item-name').innerText = p.name;
+                    document.getElementById('audit-item-code').innerText = p.code;
+                    document.getElementById('audit-item-price').innerText = p.price;
+                    document.getElementById('audit-item-original').innerText = p.originalQty;
+                    document.getElementById('audit-item-cat').innerText = p.category;
+                    
+                    const existing = this.data.audits[p.id];
+                    const inputField = document.getElementById('audit-actual-qty');
+                    
+                    if(existing) {
+                        inputField.value = existing.actualQty;
+                        this.showToast('صنف مجرود مسبقاً، يمكنك تعديله', 'info');
+                    } else {
+                        inputField.value = '';
+                    }
+                    
+                    document.getElementById('audit-active-item').classList.remove('hidden');
+                    setTimeout(() => document.getElementById('audit-active-item').classList.remove('translate-y-4', 'opacity-0'), 10);
+                    document.getElementById('audit-result-box').classList.add('hidden');
+                    
+                    setTimeout(() => inputField.focus(), 100);
+                    if(existing) this.calculateAuditDiff();
+
+                } else {
+                    this.showToast('المنتج غير موجود في جهازك', 'error');
+                    this.cancelAudit();
+                }
+            },
+
+            calculateAuditDiff: function() {
+                if(!this.activeAuditProduct) return;
+                
+                const original = this.activeAuditProduct.originalQty;
+                const actualInput = document.getElementById('audit-actual-qty').value;
+                const resultBox = document.getElementById('audit-result-box');
+                const diffText = document.getElementById('audit-diff-text');
+                
+                if(actualInput === '') {
+                    resultBox.classList.add('hidden');
+                    return;
+                }
+
+                const actual = parseInt(actualInput) || 0;
+                const diff = actual - original;
+
+                resultBox.className = 'rounded-xl p-3 mb-5 text-center font-bold text-sm transition-all border';
+                
+                if(diff === 0) {
+                    resultBox.classList.add('bg-emerald-50', 'text-success', 'border-emerald-200');
+                    diffText.innerHTML = `<i class="fas fa-check-circle text-lg mb-1 block"></i> الكمية متطابقة تماماً`;
+                } else if (diff > 0) {
+                    resultBox.classList.add('bg-amber-50', 'text-warning', 'border-amber-200');
+                    diffText.innerHTML = `<i class="fas fa-arrow-up text-lg mb-1 block"></i> فائض بالمخزن: ${diff} قطعة`;
+                } else {
+                    resultBox.classList.add('bg-red-50', 'text-danger', 'border-red-200');
+                    diffText.innerHTML = `<i class="fas fa-arrow-down text-lg mb-1 block"></i> عجز (نقص): ${Math.abs(diff)} قطعة`;
+                }
+                
+                resultBox.classList.remove('hidden');
+            },
+
+            saveAudit: function() {
+                if(!this.activeAuditProduct) return;
+                
+                const actualInput = document.getElementById('audit-actual-qty').value;
+                if(actualInput === '') return this.showToast('أدخل الكمية الفعلية للصنف', 'error');
+
+                const actual = parseInt(actualInput) || 0;
+                const diff = actual - this.activeAuditProduct.originalQty;
+
+                this.data.audits[this.activeAuditProduct.id] = {
+                    actualQty: actual,
+                    diff: diff,
+                    date: new Date().toISOString(),
+                    user: this.data.settings.user
+                };
+
+                this.saveToLocal('audits');
+                this.showToast('تم حفظ الجرد', 'success');
+                
+                this.renderAuditHistory();
+                this.cancelAudit(); 
+                document.getElementById('audit-search').value = '';
+                document.getElementById('audit-search').focus();
+            },
+            
+            cancelAudit: function() {
+                const box = document.getElementById('audit-active-item');
+                box.classList.add('translate-y-4', 'opacity-0');
+                setTimeout(() => {
+                    box.classList.add('hidden');
+                    this.activeAuditProduct = null;
+                }, 300);
+            },
+
+            renderAuditHistory: function() {
+                const list = document.getElementById('audit-history-list');
+                list.innerHTML = '';
+                
+                const auditedArr = Object.keys(this.data.audits).map(id => ({
+                    id, ...this.data.audits[id]
+                })).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 10); // Last 10
+
+                if(auditedArr.length === 0) {
+                    list.innerHTML = `<div class="text-center text-slate-400 py-4 bg-white rounded-xl border border-slate-100"><p class="text-xs font-bold">لم تقم بجرد أي صنف بعد</p></div>`;
+                    return;
+                }
+
+                auditedArr.forEach(audit => {
+                    const p = this.data.products.find(x => x.id === audit.id);
+                    if(!p) return;
+
+                    let color = audit.diff === 0 ? 'text-success bg-emerald-50 border-emerald-100' : (audit.diff > 0 ? 'text-warning bg-amber-50 border-amber-100' : 'text-danger bg-red-50 border-red-100');
+                    let icon = audit.diff === 0 ? 'fa-check' : (audit.diff > 0 ? 'fa-plus' : 'fa-minus');
+
+                    list.innerHTML += `
+                        <div class="bg-white p-2.5 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm cursor-pointer active:bg-slate-50" onclick="document.getElementById('audit-search').value='${p.code}'; app.searchForAudit();">
+                            <div class="truncate">
+                                <h5 class="font-bold text-slate-800 text-xs truncate">${p.name}</h5>
+                                <p class="text-[8px] text-slate-400 mt-0.5">${new Date(audit.date).toLocaleTimeString('ar-LY', {hour: '2-digit', minute:'2-digit'})}</p>
+                            </div>
+                            <div class="${color} px-2 py-1 rounded-lg border text-xs font-black flex items-center gap-1 shrink-0">
+                                <span>${audit.actualQty}</span> <i class="fas ${icon} text-[8px]"></i> 
+                            </div>
+                        </div>
+                    `;
+                });
+            },
+
+            resetAuditData: function() {
+                if(confirm("هل أنت متأكد من مسح جميع نتائج الجرد الحالية لبدء جرد جديد؟ (لن تحذف المنتجات)")) {
+                    this.data.audits = {};
+                    this.saveToLocal('audits');
+                    this.showToast('تم تصفير سجلات الجرد');
+                    this.renderDashboard();
+                    this.renderAuditHistory();
+                }
+            },
+
+            // --- REPORTS & EXPORT ---
+            renderReportsSummary: function() {
+                let match = 0, short = 0, surp = 0, valLoss = 0, valSurp = 0;
+                
+                Object.keys(this.data.audits).forEach(id => {
+                    const audit = this.data.audits[id];
+                    const p = this.data.products.find(x => x.id === id);
+                    if(!p) return;
+
+                    if(audit.diff === 0) match++;
+                    else if (audit.diff > 0) { surp++; valSurp += (audit.diff * (p.price || 0)); }
+                    else { short++; valLoss += (Math.abs(audit.diff) * (p.price || 0)); }
+                });
+
+                document.getElementById('rep-audited').innerText = Object.keys(this.data.audits).length;
+                document.getElementById('rep-match').innerText = match;
+                document.getElementById('rep-surplus').innerText = surp;
+                document.getElementById('rep-shortage').innerText = short;
+                document.getElementById('rep-val-surplus').innerText = valSurp.toLocaleString(undefined, {minimumFractionDigits: 2}) + ' د.ل';
+                document.getElementById('rep-val-loss').innerText = valLoss.toLocaleString(undefined, {minimumFractionDigits: 2}) + ' د.ل';
+            },
+
+            exportCSV: function() {
+                let csvContent = '\uFEFF'; 
+                csvContent += 'اسم المنتج,الباركود,القسم,سعر القطعة,الكمية الدفترية,الكمية الفعلية (جرد),الفرق,قيمة العجز/الزيادة\n';
+                
+                this.data.products.forEach(p => {
+                    const audit = this.data.audits[p.id];
+                    const actual = audit ? audit.actualQty : 'لم يجرد';
+                    const diff = audit ? audit.diff : 0;
+                    const valDiff = audit ? (diff * (p.price || 0)).toFixed(2) : 0;
+                    const safeName = `"${p.name.replace(/"/g, '""')}"`;
+                    
+                    csvContent += `${safeName},${p.code},${p.category},${p.price},${p.originalQty},${actual},${diff},${valDiff}\n`;
+                });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `جرد_${new Date().toLocaleDateString('en-GB').replace(/\//g,'-')}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+
+            // --- ADVANCED PDF GENERATOR (3 TEMPLATES) ---
+            generatePDF: function(templateType) {
+                this.showToast('جاري تصميم ملف PDF للطباعة...', 'info');
+                const container = document.getElementById('pdf-export-container');
+                container.innerHTML = ''; 
+
+                let tableRows = '';
+                let auditList = [];
+                let match = 0, short = 0, surp = 0, valLoss = 0, totalItems = 0;
+                
+                // Prepare Data
+                if(templateType === 1 || templateType === 2) {
+                    // Templates using Audited Data
+                    Object.keys(this.data.audits).forEach(id => {
+                        const p = this.data.products.find(x => x.id === id);
+                        if(p) auditList.push({p, audit: this.data.audits[id]});
+                    });
+                    
+                    if(templateType === 2) { 
+                        // Template 2: Variances Only
+                        auditList = auditList.filter(item => item.audit.diff !== 0); 
+                    }
+
+                    auditList.forEach((item, index) => {
+                        const {p, audit} = item;
+                        if(audit.diff === 0) match++;
+                        else if (audit.diff > 0) surp++;
+                        else { short++; valLoss += (Math.abs(audit.diff) * (p.price || 0)); }
+
+                        let statusText = audit.diff === 0 ? 'مطابق' : (audit.diff > 0 ? `+${audit.diff} (زيادة)` : `${audit.diff} (عجز)`);
+                        let bg = audit.diff === 0 ? '#ecfdf5' : (audit.diff > 0 ? '#fffbeb' : '#fef2f2');
+                        let color = audit.diff === 0 ? '#059669' : (audit.diff > 0 ? '#d97706' : '#dc2626');
+
+                        tableRows += `
+                            <tr style="border-bottom: 1px solid #e2e8f0; font-family:'Cairo', sans-serif;">
+                                <td style="padding: 10px; text-align: center;">${index + 1}</td>
+                                <td style="padding: 10px; text-align: right; font-weight:bold;">${p.name} <br><span style="font-size:10px; color:#64748b">${p.category}</span></td>
+                                <td style="padding: 10px; text-align: center; color:#475569; font-family: monospace;">${p.code}</td>
+                                <td style="padding: 10px; text-align: center;">${p.originalQty}</td>
+                                <td style="padding: 10px; text-align: center; font-weight: bold;">${audit.actualQty}</td>
+                                <td style="padding: 10px; text-align: center; color:${color}; font-weight:bold; background:${bg};">${statusText}</td>
+                            </tr>
+                        `;
+                    });
+                    totalItems = auditList.length;
+                } else if (templateType === 3) {
+                    // Template 3: Physical Count List (All Audited Items, simplified view)
+                    Object.keys(this.data.audits).forEach((id, index) => {
+                        const p = this.data.products.find(x => x.id === id);
+                        if(p) {
+                            const actual = this.data.audits[id].actualQty;
+                            tableRows += `
+                                <tr style="border-bottom: 1px solid #e2e8f0; font-family:'Cairo', sans-serif;">
+                                    <td style="padding: 12px; text-align: center;">${index + 1}</td>
+                                    <td style="padding: 12px; text-align: right; font-weight:bold;">${p.name}</td>
+                                    <td style="padding: 12px; text-align: right; color:#64748b;">${p.category}</td>
+                                    <td style="padding: 12px; text-align: center; font-family: monospace;">${p.code}</td>
+                                    <td style="padding: 12px; text-align: center; font-weight: bold; font-size: 16px;">${actual}</td>
+                                </tr>
+                            `;
+                            totalItems++;
+                        }
+                    });
+                }
+
+                const dateStr = new Date().toLocaleDateString('ar-LY') + ' ' + new Date().toLocaleTimeString('ar-LY');
+                
+                let title = '';
+                let headerStats = '';
+                let tableHeader = '';
+
+                if(templateType === 1) {
+                    title = 'التقرير الشامل للمخزون والجرد';
+                    headerStats = `
+                        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <div style="flex:1; background:#f8fafc; border:1px solid #e2e8f0; padding:10px; border-radius:8px; text-align:center;">مجردة: <strong>${totalItems}</strong></div>
+                            <div style="flex:1; background:#ecfdf5; border:1px solid #a7f3d0; padding:10px; border-radius:8px; text-align:center; color:#065f46;">مطابقة: <strong>${match}</strong></div>
+                            <div style="flex:1; background:#fef2f2; border:1px solid #fecaca; padding:10px; border-radius:8px; text-align:center; color:#991b1b;">عجز: <strong>${short}</strong></div>
+                        </div>
+                    `;
+                    tableHeader = `<th style="padding:10px; width:5%;">#</th><th style="padding:10px; text-align:right; width:35%;">الصنف</th><th style="padding:10px;">الباركود</th><th style="padding:10px;">دفتري</th><th style="padding:10px;">فعلي</th><th style="padding:10px;">الحالة</th>`;
+                } else if(templateType === 2) {
+                    title = 'تقرير الفروقات والتسويات المالي';
+                    headerStats = `
+                        <div style="margin-bottom: 20px; background: #fff1f2; padding: 15px; border-right: 5px solid #ef4444; border-radius: 8px; display: flex; justify-content: space-between;">
+                            <strong style="font-size:16px;">الخسارة المقدرة نتيجة العجز:</strong> 
+                            <span style="color: #ef4444; font-size: 20px; font-weight:900;">${valLoss.toLocaleString(undefined, {minimumFractionDigits:2})} د.ل</span>
+                        </div>
+                    `;
+                    tableHeader = `<th style="padding:10px; width:5%;">#</th><th style="padding:10px; text-align:right; width:35%;">الصنف</th><th style="padding:10px;">الباركود</th><th style="padding:10px;">دفتري</th><th style="padding:10px;">فعلي</th><th style="padding:10px;">الفرق</th>`;
+                } else if(templateType === 3) {
+                    title = 'بيان الجرد الفعلي الميداني';
+                    headerStats = `<div style="margin-bottom: 20px; background: #f0f9ff; padding: 10px; border-right: 4px solid #0ea5e9; border-radius: 6px;"><strong>إجمالي الأصناف المجرودة بالقائمة:</strong> ${totalItems} صنف</div>`;
+                    tableHeader = `<th style="padding:12px; width:5%;">#</th><th style="padding:12px; text-align:right; width:40%;">اسم الصنف</th><th style="padding:12px; text-align:right; width:20%;">القسم</th><th style="padding:12px; width:20%;">الباركود</th><th style="padding:12px; width:15%;">الكمية المجرودة</th>`;
+                }
+
+                let htmlTemplate = `
+                    <div style="font-family: 'Cairo', sans-serif; direction: rtl; width: 800px; background: white; padding: 40px; color: #0f172a; box-sizing: border-box;">
+                        <div style="display: flex; justify-content: space-between; border-bottom: 3px solid #0ea5e9; padding-bottom: 15px; margin-bottom: 20px;">
+                            <div>
+                                <h1 style="color: #0ea5e9; margin: 0; font-size: 32px; font-weight: 900;">${this.data.settings.systemName || 'المنظومة'}</h1>
+                                <p style="margin: 5px 0 0 0; font-size: 14px; font-weight:bold; color: #475569;">فرع: ${this.data.settings.branch}</p>
+                            </div>
+                            <div style="text-align: left;">
+                                <h2 style="margin: 0; font-size: 22px; color: #0f172a; font-weight: 900;">${title}</h2>
+                                <p style="margin: 5px 0 0 0; font-size: 12px; color: #64748b;">تاريخ التقرير: ${dateStr}</p>
+                            </div>
+                        </div>
+
+                        ${headerStats}
+
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 13px;">
+                            <thead>
+                                <tr style="background-color: #0f172a; color: white;">${tableHeader}</tr>
+                            </thead>
+                            <tbody>
+                                ${tableRows || '<tr><td colspan="6" style="text-align:center; padding: 20px; color:#64748b;">لا توجد بيانات</td></tr>'}
+                            </tbody>
+                        </table>
+
+                        <div style="display: flex; justify-content: space-between; margin-top: 40px; text-align: center; padding-top: 20px; border-top: 1px dashed #cbd5e1; font-size: 14px;">
+                            <div style="width: 30%;">
+                                <p style="margin-bottom: 40px; color:#64748b; font-weight:bold;">مسؤول المخزن / الجرد</p>
+                                <p style="border-top: 1px solid #94a3b8; padding-top: 5px; font-weight:bold;">${this.data.settings.user}</p>
+                            </div>
+                            <div style="width: 30%;">
+                                <p style="margin-bottom: 40px; color:#64748b; font-weight:bold;">الاعتماد الإداري والمطابقة</p>
+                                <p style="border-top: 1px solid #94a3b8; padding-top: 5px;">الختم / التوقيع</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                container.innerHTML = htmlTemplate;
+
+                // Wait a moment for fonts to render in the hidden div before capturing
+                setTimeout(() => {
+                    html2canvas(container.children[0], { 
+                        scale: 2, 
+                        useCORS: true,
+                        logging: false,
+                        windowWidth: 800
+                    }).then(canvas => {
+                        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                        
+                        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                        let fileName = templateType === 1 ? 'تقرير_شامل' : (templateType === 2 ? 'تقرير_فروقات' : 'جرد_ميداني');
+                        pdf.save(`${fileName}_${Date.now()}.pdf`);
+                        
+                        this.showToast('تم حفظ ملف PDF في تنزيلات هاتفك', 'success');
+                    }).catch(e => {
+                        this.showToast('فشل في توليد الـ PDF، حاول مجدداً', 'error');
+                    });
+                }, 800); 
+            },
+
+            // --- UI UTILS ---
+            openModal: function(id, isNew = true) {
+                const modal = document.getElementById(id);
+                
+                if(id === 'addProductModal') {
+                    const btnDel = document.getElementById('btn-delete-product');
+                    const title = document.getElementById('modal-product-title');
+                    const btnSaveText = document.getElementById('btn-save-text');
+                    
+                    if(isNew) {
+                        document.getElementById('p-id').value = '';
+                        document.getElementById('p-name').value = '';
+                        document.getElementById('p-code').value = '';
+                        document.getElementById('p-qty').value = '';
+                        document.getElementById('p-price').value = '0';
+                        btnDel.classList.add('hidden');
+                        title.innerText = 'إضافة منتج جديد';
+                        btnSaveText.innerText = 'حفظ في الجهاز';
+                    } else {
+                        btnDel.classList.remove('hidden');
+                        title.innerText = 'تعديل بيانات المنتج';
+                        btnSaveText.innerText = 'حفظ التعديلات';
+                    }
+                }
+
+                modal.classList.remove('hidden');
+                setTimeout(() => { modal.children[0].classList.remove('translate-y-full', 'scale-90'); }, 10);
+            },
+            
+            closeModal: function(id) {
+                const modal = document.getElementById(id);
+                modal.children[0].classList.add('translate-y-full', 'scale-90');
+                setTimeout(() => { modal.classList.add('hidden'); }, 300);
+            },
+
+            showToast: function(msg, type = 'success') {
+                const toast = document.getElementById('toast');
+                document.getElementById('toast-msg').innerText = msg;
+                const icon = document.getElementById('toast-icon');
+                
+                if(type === 'success') icon.className = 'fas fa-check-circle text-success text-base';
+                else if(type === 'error') icon.className = 'fas fa-exclamation-triangle text-danger text-base';
+                else icon.className = 'fas fa-info-circle text-primary text-base';
+
+                toast.classList.remove('opacity-0', '-translate-y-4');
+                toast.classList.add('translate-y-0');
+                
+                if(this.toastTimeout) clearTimeout(this.toastTimeout);
+                this.toastTimeout = setTimeout(() => {
+                    toast.classList.add('opacity-0', '-translate-y-4');
+                    toast.classList.remove('translate-y-0');
+                }, 3000);
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            window.app.init();
+        });
+    </script>
+</body>
+</html>
